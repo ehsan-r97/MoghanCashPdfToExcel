@@ -8,7 +8,7 @@ import datetime
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 
 
 # ---------- Shamsi date ----------
@@ -159,7 +159,7 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
                         row_counter += 1
 
     df_sheet1 = pd.DataFrame(sheet1_data)
-    with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+    with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
         df_sheet1.to_excel(writer, sheet_name='Sheet1', index=False)
 
 

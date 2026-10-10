@@ -7,27 +7,29 @@ openpyxl_datas,   openpyxl_bins,   openpyxl_hidden   = collect_all('openpyxl')
 pdfplumber_datas, pdfplumber_bins, pdfplumber_hidden = collect_all('pdfplumber')
 pdfminer_datas,   pdfminer_bins,   pdfminer_hidden   = collect_all('pdfminer')
 pillow_datas,     pillow_bins,     pillow_hidden     = collect_all('PIL')
+xlsxwriter_datas, xlsxwriter_bins, xlsxwriter_hidden = collect_all('xlsxwriter')
 
 a = Analysis(
     ['src/main.py'],
     pathex=[],
     binaries=(
         numpy_bins + pandas_bins + openpyxl_bins +
-        pdfplumber_bins + pdfminer_bins + pillow_bins
+        pdfplumber_bins + pdfminer_bins + pillow_bins + xlsxwriter_bins
     ),
     datas=(
         numpy_datas + pandas_datas + openpyxl_datas +
-        pdfplumber_datas + pdfminer_datas + pillow_datas
+        pdfplumber_datas + pdfminer_datas + pillow_datas + xlsxwriter_datas
     ),
     hiddenimports=(
         numpy_hidden + pandas_hidden + openpyxl_hidden +
-        pdfplumber_hidden + pdfminer_hidden + pillow_hidden + [
+        pdfplumber_hidden + pdfminer_hidden + pillow_hidden + xlsxwriter_hidden + [
             'tkinter',
             'tkinter.filedialog',
             'tkinter.messagebox',
             'arabic_reshaper',
             'bidi',
             'openpyxl.cell._writer',
+            'xlsxwriter',
         ]
     ),
     hookspath=[],
