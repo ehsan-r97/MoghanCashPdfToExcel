@@ -8,7 +8,7 @@ import datetime
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-VERSION = "1.0.2"
+VERSION = "1.0.4"
 
 
 # ---------- Shamsi date ----------
@@ -43,7 +43,7 @@ def today_shamsi(sep='-'):
     return f"{jy:04d}{sep}{jm:02d}{sep}{jd:02d}"
 
 
-# ---------- your original helpers (unchanged) ----------
+# ---------- helpers ----------
 def clean_financial_numbers(val):
     """Converts Persian digits to English and removes commas."""
     if pd.isna(val) or val is None or val == '' or val == '-':
@@ -75,7 +75,7 @@ def fix_persian_text(text):
     return bidi_text
 
 
-# ---------- processor (your original + bank_account param) ----------
+# ---------- processor ----------
 def process_pdf_to_excel(pdf_path, output_excel, bank_account):
     sheet1_data = []
     row_counter = 1
@@ -109,19 +109,17 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
 
                     row_text = " | ".join(row)
 
-                    # بررسی وجود تاریخ برای تایید سطر تراکنش اصلی
                     date_match = re.search(r'(\d{4}/\d{2}/\d{2})', row_text)
                     if date_match:
                         raw_variz = row[deposit_idx] if len(row) > deposit_idx else ''
                         variz_amount = clean_financial_numbers(raw_variz)
 
-                        # فیلتر سخت‌گیرانه: اگر مقدار خالی است، عدد نیست، یا برابر با 0 است، سطر را نادیده بگیر
                         if not variz_amount or not variz_amount.isdigit() or int(variz_amount) == 0:
                             continue
 
                         time_match = re.search(r'(\d{2}:\d{2}:\d{2})', row_text)
+                        time_value = format_time_hh_mm(time_match.group(1)) if time_match else ''
 
-                        # استخراج توضیحات سطر زیرین
                         supp_desc = ""
                         if i + 1 < len(table):
                             next_row = [str(cell) if cell else '' for cell in table[i + 1]]
@@ -132,19 +130,18 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
                         def safe_get(r, index):
                             return r[index] if index < len(r) else ''
 
-                        # ساختاردهی نهایی دقیقاً مطابق با فایل ایمپورت هدف
                         mapped_row = {
                             'ردیف کمکی': row_counter,
                             'حساب بانکی (شماره حساب)': bank_account,
                             'شعبه': fix_persian_text(safe_get(row, 6)),
-                            'شناسه واریز': safe_get(row, 4),
-                            'واریز': variz_amount,
+                            'شناسه واریز': safe_get(row, 4) or '0',
+                            'واریز': int(variz_amount),
                             'شرح سند': fix_persian_text(safe_get(row, 3)),
                             'شماره سند': '',
                             'توضیح واریز': fix_persian_text(safe_get(row, 5)),
                             'تاریخ': date_match.group(1),
-                            'ساعت': format_time_hh_mm(time_match.group(1)) if time_match else '',
-                            'فرمول ساعت': f'=LEFT(J{row_counter + 1},5)',
+                            'ساعت': time_value,
+                            'فرمول ساعت': time_value,
                             'توضیحات 1': '',
                             'توضیحات 2': fix_persian_text(supp_desc),
                             'توضیحات سر برگ': 'واریزی null به حساب null null',
@@ -155,26 +152,23 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
                             'نوع دریافت': 'انتقال بانکی',
                             'تعین وضعیت': 'صدور سند رسید دریافت',
                             'کد مشتری': '0',
-                            'مشتری': f'=U{row_counter + 1}',
+                            'مشتری': '0',
                             'حوزه فروش': '4'
                         }
                         sheet1_data.append(mapped_row)
                         row_counter += 1
 
-    # ذخیره در فایل اکسل
     df_sheet1 = pd.DataFrame(sheet1_data)
     with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
         df_sheet1.to_excel(writer, sheet_name='Sheet1', index=False)
 
 
 def select_input_file():
-    # شماره حساب
     bank_account = account_var.get().strip()
     if not bank_account:
         messagebox.showerror("Missing account", "لطفاً شماره حساب بانکی را وارد کنید.")
         return
 
-    # نام فایل خروجی
     out_name = out_name_var.get().strip()
     if not out_name:
         messagebox.showerror("Missing filename", "لطفاً نام فایل خروجی را وارد کنید.")
