@@ -33,13 +33,15 @@ jobs:
 
       - run: pyinstaller pyinstaller.spec
 
-      - run: |
-          if (!(Test-Path "dist/BankPDFImporter/BankPDFImporter.exe")) {
+      - name: Verify build output exists
+        run: |
+          if (!(Test-Path "dist/BankPDFImporter.exe")) {
             Write-Error "Build output not found!"
             exit 1
           }
 
-      - run: Compress-Archive -Path dist/BankPDFImporter/* -DestinationPath dist/BankPDFImporter.zip
+      - name: Zip the exe
+        run: Compress-Archive -Path dist/BankPDFImporter.exe -DestinationPath dist/BankPDFImporter.zip
 
       - uses: softprops/action-gh-release@v2
         with:
