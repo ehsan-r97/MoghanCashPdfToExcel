@@ -8,6 +8,8 @@ import datetime
 import arabic_reshaper
 from bidi.algorithm import get_display
 
+VERSION = "1.0.2"
+
 
 # ---------- Shamsi date ----------
 def gregorian_to_jalali(gy, gm, gd):
@@ -34,6 +36,7 @@ def gregorian_to_jalali(gy, gm, gd):
         jd = 1 + (j_day_no - 186) % 30
     return jy, jm, jd
 
+
 def today_shamsi(sep='-'):
     t = datetime.date.today()
     jy, jm, jd = gregorian_to_jalali(t.year, t.month, t.day)
@@ -43,7 +46,7 @@ def today_shamsi(sep='-'):
 # ---------- your original helpers (unchanged) ----------
 def clean_financial_numbers(val):
     """Converts Persian digits to English and removes commas."""
-    if pd.isna(val) or val is None or val == '' or val == '-': 
+    if pd.isna(val) or val is None or val == '' or val == '-':
         return ''
     val = str(val).strip()
     persian_digits = '۰۱۲۳۴۵۶۷۸۹'
@@ -51,17 +54,20 @@ def clean_financial_numbers(val):
     translation_table = str.maketrans(persian_digits, english_digits)
     return val.translate(translation_table).replace(',', '')
 
+
 def format_time_hh_mm(val):
     """Extracts only HH:MM from a time string."""
-    if pd.isna(val) or val is None or val == '': 
+    if pd.isna(val) or val is None or val == '':
         return ''
     match = re.search(r'(\d{1,2}:\d{2})', str(val))
-    if match: return match.group(1)
+    if match:
+        return match.group(1)
     return str(val)[:5]
+
 
 def fix_persian_text(text):
     """Reshapes disconnected Persian letters and fixes RTL direction."""
-    if not text or pd.isna(text) or text == '-': 
+    if not text or pd.isna(text) or text == '-':
         return ''
     text = str(text).replace('\n', ' ').strip()
     reshaped_text = arabic_reshaper.reshape(text)
@@ -69,17 +75,18 @@ def fix_persian_text(text):
     return bidi_text
 
 
-# ---------- your original processor (only bank_account param added) ----------
+# ---------- processor (your original + bank_account param) ----------
 def process_pdf_to_excel(pdf_path, output_excel, bank_account):
     sheet1_data = []
     row_counter = 1
-    
+
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             tables = page.extract_tables()
             for table in tables:
-                if not table: continue
-                
+                if not table:
+                    continue
+
                 # پیدا کردن ستون واریز به صورت داینامیک
                 deposit_idx = None
                 for row in table[:10]:
@@ -91,33 +98,33 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
                                 break
                     if deposit_idx is not None:
                         break
-                
+
                 if deposit_idx is None:
-                    deposit_idx = 2 
+                    deposit_idx = 2
 
                 for i, row in enumerate(table):
                     row = [str(cell) if cell else '' for cell in row]
                     if not row or all(cell == '' for cell in row):
                         continue
-                    
+
                     row_text = " | ".join(row)
-                    
+
                     # بررسی وجود تاریخ برای تایید سطر تراکنش اصلی
                     date_match = re.search(r'(\d{4}/\d{2}/\d{2})', row_text)
                     if date_match:
                         raw_variz = row[deposit_idx] if len(row) > deposit_idx else ''
                         variz_amount = clean_financial_numbers(raw_variz)
-                        
-                        # فیلتر سخت‌گیرانه
+
+                        # فیلتر سخت‌گیرانه: اگر مقدار خالی است، عدد نیست، یا برابر با 0 است، سطر را نادیده بگیر
                         if not variz_amount or not variz_amount.isdigit() or int(variz_amount) == 0:
                             continue
 
                         time_match = re.search(r'(\d{2}:\d{2}:\d{2})', row_text)
-                        
+
                         # استخراج توضیحات سطر زیرین
                         supp_desc = ""
                         if i + 1 < len(table):
-                            next_row = [str(cell) if cell else '' for cell in table[i+1]]
+                            next_row = [str(cell) if cell else '' for cell in table[i + 1]]
                             next_row_text = " ".join(next_row)
                             if not re.search(r'\d{4}/\d{2}/\d{2}', next_row_text):
                                 supp_desc = next_row_text.replace('|', '').strip()
@@ -125,18 +132,19 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
                         def safe_get(r, index):
                             return r[index] if index < len(r) else ''
 
+                        # ساختاردهی نهایی دقیقاً مطابق با فایل ایمپورت هدف
                         mapped_row = {
                             'ردیف کمکی': row_counter,
-                            'حساب بانکی (شماره حساب)': bank_account,   # from GUI
-                            'شعبه': fix_persian_text(safe_get(row, 6)), 
-                            'شناسه واریز': safe_get(row, 4), 
+                            'حساب بانکی (شماره حساب)': bank_account,
+                            'شعبه': fix_persian_text(safe_get(row, 6)),
+                            'شناسه واریز': safe_get(row, 4),
                             'واریز': variz_amount,
                             'شرح سند': fix_persian_text(safe_get(row, 3)),
-                            'شماره سند': '', 
-                            'توضیح واریز': fix_persian_text(safe_get(row, 5)), 
+                            'شماره سند': '',
+                            'توضیح واریز': fix_persian_text(safe_get(row, 5)),
                             'تاریخ': date_match.group(1),
                             'ساعت': format_time_hh_mm(time_match.group(1)) if time_match else '',
-                            'فرمول ساعت': f'=LEFT(J{row_counter+1},5)',
+                            'فرمول ساعت': f'=LEFT(J{row_counter + 1},5)',
                             'توضیحات 1': '',
                             'توضیحات 2': fix_persian_text(supp_desc),
                             'توضیحات سر برگ': 'واریزی null به حساب null null',
@@ -147,28 +155,29 @@ def process_pdf_to_excel(pdf_path, output_excel, bank_account):
                             'نوع دریافت': 'انتقال بانکی',
                             'تعین وضعیت': 'صدور سند رسید دریافت',
                             'کد مشتری': '0',
-                            'مشتری': f'=U{row_counter+1}',
+                            'مشتری': f'=U{row_counter + 1}',
                             'حوزه فروش': '4'
                         }
                         sheet1_data.append(mapped_row)
                         row_counter += 1
 
+    # ذخیره در فایل اکسل
     df_sheet1 = pd.DataFrame(sheet1_data)
     with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
         df_sheet1.to_excel(writer, sheet_name='Sheet1', index=False)
 
 
 def select_input_file():
-    # ---- read account number ----
+    # شماره حساب
     bank_account = account_var.get().strip()
     if not bank_account:
-        messagebox.showerror("Missing account", "Please enter the bank account number.")
+        messagebox.showerror("Missing account", "لطفاً شماره حساب بانکی را وارد کنید.")
         return
 
-    # ---- read output filename ----
+    # نام فایل خروجی
     out_name = out_name_var.get().strip()
     if not out_name:
-        messagebox.showerror("Missing filename", "Please enter an output filename.")
+        messagebox.showerror("Missing filename", "لطفاً نام فایل خروجی را وارد کنید.")
         return
     if not out_name.lower().endswith('.xlsx'):
         out_name += '.xlsx'
@@ -177,16 +186,18 @@ def select_input_file():
         title="Select Bank PDF",
         filetypes=[("PDF Files", "*.pdf")]
     )
-    if not pdf_path: return
-        
+    if not pdf_path:
+        return
+
     output_path = filedialog.asksaveasfilename(
         title="Save Import Excel As",
         initialfile=out_name,
-        defaultextension=".xlsx", 
+        defaultextension=".xlsx",
         filetypes=[("Excel Files", "*.xlsx")]
     )
-    if not output_path: return
-        
+    if not output_path:
+        return
+
     try:
         process_pdf_to_excel(pdf_path, output_path, bank_account)
         messagebox.showinfo("Success", f"Deposit Data successfully extracted and saved to:\n{output_path}")
@@ -198,28 +209,48 @@ def select_input_file():
 
 # --- GUI Setup ---
 root = tk.Tk()
-root.title("Bank PDF Importer (Deposits Only)")
+root.title(f"Bank PDF Importer v{VERSION} (Deposits Only)")
 root.geometry("480x280")
-root.eval('tk::PlaceWindow . center')
+try:
+    root.eval('tk::PlaceWindow . center')
+except tk.TclError:
+    pass
 
-lbl = tk.Label(root, text="Direct PDF to Import Format\n(Extracts Only Valid Deposits -> Generates Sheet1)", font=("Arial", 11))
+lbl = tk.Label(
+    root,
+    text="Direct PDF to Import Format\n(Extracts Only Valid Deposits -> Generates Sheet1)",
+    font=("Arial", 11)
+)
 lbl.pack(pady=10)
 
-# Inputs
 frame = tk.Frame(root)
 frame.pack(pady=5)
 
-tk.Label(frame, text="شماره حساب بانکی:", font=("Arial", 10)).grid(row=0, column=0, sticky='e', padx=(0, 8), pady=6)
+tk.Label(frame, text="شماره حساب بانکی:", font=("Arial", 10)).grid(
+    row=0, column=0, sticky='e', padx=(0, 8), pady=6
+)
 account_var = tk.StringVar(value='0101041899008')
-tk.Entry(frame, textvariable=account_var, width=25, font=("Arial", 10), justify='center').grid(row=0, column=1, pady=6)
+tk.Entry(frame, textvariable=account_var, width=25,
+         font=("Arial", 10), justify='center').grid(row=0, column=1, pady=6)
 
-tk.Label(frame, text="نام فایل خروجی:", font=("Arial", 10)).grid(row=1, column=0, sticky='e', padx=(0, 8), pady=6)
+tk.Label(frame, text="نام فایل خروجی:", font=("Arial", 10)).grid(
+    row=1, column=0, sticky='e', padx=(0, 8), pady=6
+)
 out_name_var = tk.StringVar(value=today_shamsi('-'))
-tk.Entry(frame, textvariable=out_name_var, width=25, font=("Arial", 10), justify='center').grid(row=1, column=1, pady=6)
+tk.Entry(frame, textvariable=out_name_var, width=25,
+         font=("Arial", 10), justify='center').grid(row=1, column=1, pady=6)
 
-tk.Label(root, text="(پسوند .xlsx خودکار اضافه می‌شود)", font=("Arial", 8), fg="#888").pack(pady=(0, 8))
+tk.Label(root, text="(پسوند .xlsx خودکار اضافه می‌شود)",
+         font=("Arial", 8), fg="#888").pack(pady=(0, 8))
 
-btn = tk.Button(root, text="Select PDF & Generate Import File", command=select_input_file, width=40, height=2, bg="#2196F3", fg="white", font=("Arial", 10, "bold"))
+btn = tk.Button(
+    root,
+    text="Select PDF & Generate Import File",
+    command=select_input_file,
+    width=40, height=2,
+    bg="#2196F3", fg="white",
+    font=("Arial", 10, "bold")
+)
 btn.pack(pady=10)
 
 root.mainloop()
